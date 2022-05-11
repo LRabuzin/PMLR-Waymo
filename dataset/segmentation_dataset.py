@@ -20,7 +20,7 @@ class WaymoSegmentationDataset(Dataset):
         self.mode = mode
         self.quantization_size = quantization_size
         self.transform = transform
-        self.input_files = [os.join(root_dir, mode, f) for f in os.listdir(os.join(root_dir, mode)) if os.isfile(os.join(root_dir, mode, f))]
+        self.input_files = [os.path.join(root_dir, mode, f) for f in os.listdir(os.path.join(root_dir, mode)) if os.path.isfile(os.path.join(root_dir, mode, f))]
         self.curr_i = 0
         self.data = []
     
@@ -32,7 +32,7 @@ class WaymoSegmentationDataset(Dataset):
         else:
             return "FIND TESTING SIZE"
     
-    def convert_range_image_to_point_cloud_labels(frame,
+    def convert_range_image_to_point_cloud_labels(self, frame,
                                               range_images,
                                               segmentation_labels,
                                               ri_index=0):
