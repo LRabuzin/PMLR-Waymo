@@ -1,5 +1,6 @@
 import os
 import torch
+from tqdm import TqdmExperimentalWarning
 import tensorflow.compat.v1 as tf
 import numpy as np
 import MinkowskiEngine as ME
@@ -85,10 +86,12 @@ class WaymoSegmentationDataset(Dataset):
         # (range_images, camera_projections, segmentation_labels, range_image_top_pose)
         parsed_frames = [frame_utils.parse_range_image_and_camera_projection(frame) for frame in curr_frames]
 
-        for i, frame in curr_frames:
-            points, _ = frame_utils.convert_range_image_to_point_cloud(frame, parsed_frames[i][0], parsed_frames[i][1], parsed_frames[i][3], keep_polar_features=True)
-            points_ri2, _ = frame_utils.convert_range_image_to_point_cloud(frame, parsed_frames[i][0], parsed_frames[i][1], parsed_frames[i][3], ri_index=1, keep_polar_features=True)
-            
+        for parsed_frame, frame in zip(parsed_frames, curr_frames):
+            points, _ = frame_utils.convert_range_image_to_point_cloud(frame, parsed_frame[0], parsed_frame[1], parsed_frame[3], keep_polar_features=True)
+            points_ri2, _ = frame_utils.convert_range_image_to_point_cloud(frame, parsed_frame[0], parsed_frame[1], parsed_frame[3], ri_index=1, keep_polar_features=True)
+            points = np.concatenate(points)
+            points_ri2 = np.concatenate(points_ri2)
+
             inner_features = []
             inner_coordinates = []
             inner_labels = []
@@ -100,28 +103,32 @@ class WaymoSegmentationDataset(Dataset):
                 inner_features.append(point[:3])
                 inner_coordinates.append(point[3:])
 
-            point_labels = self.convert_range_image_to_point_cloud_labels(frame, parsed_frames[i][0], parsed_frames[i][2])
-            point_labels_ri2 = self.convert_range_image_to_point_cloud_labels(frame, parsed_frames[i][0], parsed_frames[i][2], ri_index=1)
-            
+            point_labels = self.convert_range_image_to_point_cloud_labels(frame, parsed_frame[0], parsed_frame[2])
+            point_labels_ri2 = self.convert_range_image_to_point_cloud_labels(frame, parsed_frame[0], parsed_frame[2], ri_index=1)
+            point_labels = np.concatenate(point_labels)
+            point_labels_ri2 = np.concatenate(point_labels_ri2)
+
             for label in point_labels:
                 inner_labels.append(label)
             
             for label in point_labels_ri2:
                 inner_labels.append(label)
 
-
-            # 3d points in vehicle frame.
-            inner_features_all = np.concatenate(inner_features, axis=0)
-            inner_coordinates_all = np.concatenate(inner_coordinates, axis=0)
-            inner_labels_all = np.concatenate(inner_labels, axis=0)
+            inner_features = np.asarray(inner_features)
+            inner_coordinates = np.asarray(inner_coordinates)
+            inner_labels = np.asarray(inner_labels)
 
             discrete_coords, unique_feats, unique_labels = ME.utils.sparse_quantize(
-                coordinates=inner_coordinates_all,
-                features=inner_features_all,
-                labels=inner_labels_all,
+                coordinates=inner_coordinates,
+                features=inner_features,
+                labels=inner_labels,
                 quantization_size=self.quantization_size,
-                ignore_label=-1)
-            
+                ignore_label=0)
+
             self.data.append((discrete_coords, unique_feats, unique_labels))
         
         return self.data.pop()
+
+if __name__=="__main__":
+    dataset = WaymoSegmentationDataset(root_dir='/cluster/scratch/lrabuzin/waymo_data_updated')
+    print(dataset[0])
