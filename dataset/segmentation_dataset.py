@@ -6,17 +6,15 @@ from torch.utils.data import Dataset
 
 tf.enable_eager_execution()
 
-from waymo_open_dataset.utils import  frame_utils
-from waymo_open_dataset import dataset_pb2 as open_dataset
-
 
 class WaymoSegmentationDataset(Dataset):
 
-    def __init__(self, root_dir, mode='training', quantization_size = 0.2, transform=None):
+    def __init__(self, root_dir, mode='training', quantization_size = 0.2, transform=None, device = 'cpu'):
         self.root_dir = root_dir
         self.mode = mode
         self.quantization_size = quantization_size
         self.transform = transform
+        self.device = device
         self.input_files = [os.path.join(root_dir, mode, f) for f in os.listdir(os.path.join(root_dir, mode)) if os.path.isfile(os.path.join(root_dir, mode, f))]
     
     def __len__(self):
@@ -37,9 +35,14 @@ class WaymoSegmentationDataset(Dataset):
             features=features,
             labels=labels,
             quantization_size=self.quantization_size,
-            ignore_label=0)
+            ignore_label=0,
+            device = self.device)
+        
+        if self.transform:
+            discrete_coords, unique_feats, unique_labels = self.transform(discrete_coords, unique_feats, unique_labels)
 
         return discrete_coords, unique_feats, unique_labels
+        # return discrete_coords, torch.tensor(np.array(unique_feats)), torch.tensor(np.array(unique_labels)).type(torch.LongTensor)
 
 if __name__=="__main__":
     dataset = WaymoSegmentationDataset(root_dir='/cluster/scratch/lrabuzin/waymo_frames')
