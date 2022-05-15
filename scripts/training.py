@@ -20,25 +20,26 @@ def validate_model(model, valid_dl, loss_func, no_classes=22, device='cpu'):
     model.eval()
 
     val_loss = 0.
-    total_out = []
-    total_labels = []
+    total_intersection = [0]*no_classes
+    total_union = [0]*no_classes
 
+    # print("Entered validation")
     with torch.inference_mode():
         valid_iter = iter(valid_dl)
         for i, data in enumerate(valid_iter):
+            # print(f"Validation iter {i}")
             coords, feats, labels = data
             out = model(ME.SparseTensor(feats, coords, device = device))
+            out_squeezed = out.F.squeeze()
+            val_loss += loss_func(out_squeezed, labels.long().to(device)).item()
 
-            val_loss += loss_func(out.F.squeeze(), labels.long().to(device)).item()
+            for i in range(no_classes):
+                intersection, union = eval_utils.iou_separate(out_squeezed.to(torch.device('cpu')), labels.to(torch.device('cpu')), i)
+                total_intersection[i] += intersection
+                total_union[i] += union
 
-            total_out.append(out.to(torch.device('cpu')))
-            total_labels.append(labels.to(torch.device('cpu')))
 
-
-    total_out = torch.cat(total_out)
-    total_labels = torch.cat(total_labels)
-
-    iou_scores = [eval_utils.iou_single_class(total_out, total_labels, class_id, no_classes) for class_id in range(no_classes)]
+    iou_scores = [i/u for i,u in zip(total_intersection, total_union)]
     iou_dict = dict(enumerate(iou_scores))
 
     return val_loss / len(valid_dl), iou_dict
@@ -100,8 +101,9 @@ if __name__ == "__main__":
 
             print(f'Epoch:{epoch}, Iter:{i}, Loss:{accum_loss/accum_iter}')
         
-        val_loss, iou_dict = validate_model(net, valid_dataloader, nn.CrossEntropyLoss(reduction='mean'), device=device)
-
+        if (epoch+1)%2 == 0:
+            val_loss, iou_dict = validate_model(net, valid_dataloader, nn.CrossEntropyLoss(reduction='mean'), device=device)
+            
         wandb.log({"validation loss": val_loss, "IOUs": iou_dict})
         print(f'Validation loss: {val_loss}')
         print(f'IOUs per class: {iou_dict}')

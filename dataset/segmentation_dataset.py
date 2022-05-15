@@ -15,7 +15,7 @@ class WaymoSegmentationDataset(Dataset):
         self.quantization_size = quantization_size
         self.transform = transform
         self.device = device
-        self.input_files = [os.path.join(root_dir, mode, f) for f in os.listdir(os.path.join(root_dir, mode)) if os.path.isfile(os.path.join(root_dir, mode, f))]
+        self.input_files = [os.path.join(root_dir, mode, f) for f in os.listdir(os.path.join(root_dir, mode))]
     
     def __len__(self):
         return len(self.input_files)
