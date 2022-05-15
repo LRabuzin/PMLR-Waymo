@@ -1,5 +1,4 @@
 import os
-from unicodedata import name
 import utils
 import tensorflow.compat.v1 as tf
 import numpy as np
