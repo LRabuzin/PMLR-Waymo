@@ -29,10 +29,11 @@ def validate_model(model, valid_dl, loss_func, no_classes=22, device='cpu'):
             coords, feats, labels = data
             out = model(ME.SparseTensor(feats, coords, device = device))
 
-            total_out.append(out)
-            total_labels.append(labels)
-
             val_loss += loss_func(out.F.squeeze(), labels.long().to(device)).item()
+
+            total_out.append(out.to(torch.device('cpu')))
+            total_labels.append(labels.to(torch.device('cpu')))
+
 
     total_out = torch.cat(total_out)
     total_labels = torch.cat(total_labels)
@@ -100,7 +101,7 @@ if __name__ == "__main__":
             print(f'Epoch:{epoch}, Iter:{i}, Loss:{accum_loss/accum_iter}')
         
         val_loss, iou_dict = validate_model(net, valid_dataloader, nn.CrossEntropyLoss(reduction='mean'), device=device)
-        
+
         wandb.log({"validation loss": val_loss, "IOUs": iou_dict})
         print(f'Validation loss: {val_loss}')
         print(f'IOUs per class: {iou_dict}')
