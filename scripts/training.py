@@ -1,13 +1,19 @@
+import sys
+
+sys.path.append('/cluster/home/lrabuzin/PMLR-Waymo/dataset')
+sys.path.append('/cluster/home/lrabuzin/PMLR-Waymo/models')
+
 import torch
 import torch.nn as nn
 import torch.optim as optim
 import MinkowskiEngine as ME
 from torch.utils.data import DataLoader
-from dataset import segmentation_dataset
-from models import minkunet
+import segmentation_dataset
+import minkunet
 
 if __name__ == "__main__":
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    # print(f'Device: {device}')
     train_dataset = segmentation_dataset.WaymoSegmentationDataset(root_dir='/cluster/scratch/lrabuzin/waymo_frames', device=device)
     train_dataloader = DataLoader(
         train_dataset,
@@ -16,7 +22,7 @@ if __name__ == "__main__":
         num_workers=1,
         shuffle = True)
 
-    criterion = nn.CrossEntropyLoss(reduce='sum')
+    criterion = nn.CrossEntropyLoss(reduction='mean')
     net = minkunet.MinkUNet14A(in_channels=3, out_channels=23, D=3)
 
     optimizer = optim.SGD(
@@ -24,17 +30,22 @@ if __name__ == "__main__":
         lr=0.001,
         momentum=0.9)
 
-
+    print('Instantiated everything')
     for epoch in range(10):
+        # print(f"Epoch {epoch+1}")
         train_iter = iter(train_dataloader)
         accum_loss = 0
         accum_iter = 0
         for i, data in enumerate(train_iter):
+            # print(f"iter {i}")
             coords, feats, labels = data
+            # print(f"got data")
             out = net(ME.SparseTensor(feats, coords))
+            # print(f"forward pass")
             optimizer.zero_grad()
             loss = criterion(out.F.squeeze(), labels.long())
             loss.backward()
+            # print(f"backward pass")
             optimizer.step()
 
             accum_loss += loss.item()

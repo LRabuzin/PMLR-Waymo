@@ -36,7 +36,7 @@ class WaymoSegmentationDataset(Dataset):
             labels=labels,
             quantization_size=self.quantization_size,
             ignore_label=0,
-            device = self.device)
+            device = str(self.device))
         
         if self.transform:
             discrete_coords, unique_feats, unique_labels = self.transform(discrete_coords, unique_feats, unique_labels)
