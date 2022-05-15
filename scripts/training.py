@@ -14,7 +14,7 @@ import segmentation_dataset
 import minkunet
 
 if __name__ == "__main__":
-    wandb.init(project="segmentation_test", entity="lrabuzin")
+    wandb.init(project="pmlr-waymo", entity="lrabuzin")
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     # print(f'Device: {device}')
@@ -62,6 +62,8 @@ if __name__ == "__main__":
             loss.backward()
             # print(f"backward pass")
             optimizer.step()
+
+            wandb.log({"loss": loss.item()})
 
             accum_loss += loss.item()
             accum_iter += 1
