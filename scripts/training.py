@@ -3,6 +3,8 @@ import sys
 sys.path.append('/cluster/home/lrabuzin/PMLR-Waymo/dataset')
 sys.path.append('/cluster/home/lrabuzin/PMLR-Waymo/models')
 
+import wandb
+
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -12,6 +14,8 @@ import segmentation_dataset
 import minkunet
 
 if __name__ == "__main__":
+    wandb.init(project="segmentation_test", entity="lrabuzin")
+
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     # print(f'Device: {device}')
     train_dataset = segmentation_dataset.WaymoSegmentationDataset(root_dir='/cluster/scratch/lrabuzin/waymo_frames', device=device)
@@ -30,6 +34,15 @@ if __name__ == "__main__":
         net.parameters(),
         lr=0.001,
         momentum=0.9)
+    
+    wandb.config = {
+        "learning_rate": 0.001,
+        "epochs": 10,
+        "batch_size": 5,
+        "momentum" : 0.9
+    }
+
+    wandb.watch(net)
 
     # print('Instantiated everything')
     for epoch in range(10):
