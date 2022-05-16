@@ -25,3 +25,4 @@
 - run code
 - `cd ~/logs`
 - `wandb sync --clean --sync-all`
+- runs can be viewed at https://wandb.ai/lrabuzin/pmlr-waymo

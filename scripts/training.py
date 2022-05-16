@@ -1,7 +1,6 @@
 import sys
 import os
 
-
 parent_dir = os.path.dirname(os.path.dirname(__file__))
 
 sys.path.append(os.path.join(parent_dir, 'dataset'))
@@ -16,7 +15,7 @@ import MinkowskiEngine as ME
 from torch.utils.data import DataLoader
 import segmentation_dataset
 import minkunet
-
+import argparse
 
 
 def validate_model(model, valid_dl, loss_func, no_classes=23, device='cpu'):
@@ -47,14 +46,18 @@ def validate_model(model, valid_dl, loss_func, no_classes=23, device='cpu'):
     return val_loss / len(valid_dl), iou_dict
 
 if __name__ == "__main__":
-    wandb.init(project="pmlr-waymo")
-    wandb.config = {
-        "learning_rate": 0.1,
-        "epochs": 10,
-        "batch_size": 5,
-        "momentum" : 0.9,
-        "weight_decay": 1e-4
-    }
+    parser = argparse.ArgumentParser()
+
+    parser.add_argument('--batch_size', default=5, type=int)
+    parser.add_argument('--max_epochs', default=10, type=int)
+    parser.add_argument('--lr', default=0.1, type=float)
+    parser.add_argument('--momentum', type=float, default=0.9)
+    parser.add_argument('--weight_decay',type=float, default=1e-4)
+
+    hyperparams = parser.parse_args()
+
+    wandb.init(project="pmlr-waymo", config=vars(hyperparams))
+
     config = wandb.config
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -85,7 +88,7 @@ if __name__ == "__main__":
 
     wandb.watch(net)
 
-    for epoch in range(config["epochs"]):
+    for epoch in range(config["max_epochs"]):
         train_iter = iter(train_dataloader)
         accum_loss = 0
         accum_iter = 0
