@@ -45,10 +45,11 @@ def validate_model(model, valid_dl, loss_func, no_classes=23, device='cpu'):
 if __name__ == "__main__":
     wandb.init(project="pmlr-waymo", entity="lrabuzin")
     wandb.config = {
-        "learning_rate": 0.001,
+        "learning_rate": 0.1,
         "epochs": 10,
         "batch_size": 5,
-        "momentum" : 0.9
+        "momentum" : 0.9,
+        "weight_decay": 1e-4
     }
     config = wandb.config
 
@@ -75,7 +76,8 @@ if __name__ == "__main__":
     optimizer = optim.SGD(
         net.parameters(),
         lr=config["learning_rate"],
-        momentum=config["momentum"])
+        momentum=config["momentum"],
+        weight_decay=config["weight_decay"])
 
     wandb.watch(net)
 
