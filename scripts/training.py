@@ -15,7 +15,7 @@ import minkunet
 
 
 
-def validate_model(model, valid_dl, loss_func, no_classes=22, device='cpu'):
+def validate_model(model, valid_dl, loss_func, no_classes=23, device='cpu'):
     "Compute performance of the model on the validation dataset"
     model.eval()
 
@@ -23,11 +23,9 @@ def validate_model(model, valid_dl, loss_func, no_classes=22, device='cpu'):
     total_intersection = [0]*no_classes
     total_union = [0]*no_classes
 
-    # print("Entered validation")
     with torch.inference_mode():
         valid_iter = iter(valid_dl)
         for i, data in enumerate(valid_iter):
-            # print(f"Validation iter {i}")
             coords, feats, labels = data
             out = model(ME.SparseTensor(feats, coords, device = device))
             out_squeezed = out.F.squeeze()
@@ -71,7 +69,7 @@ if __name__ == "__main__":
         collate_fn=ME.utils.SparseCollation(),
         num_workers=0)
 
-    criterion = nn.CrossEntropyLoss(reduction='mean')
+    criterion = nn.CrossEntropyLoss(reduction='mean', ignore_index=0)
     net = minkunet.MinkUNet14A(in_channels=3, out_channels=23, D=3)
     net = net.to(device)
     optimizer = optim.SGD(
@@ -102,8 +100,8 @@ if __name__ == "__main__":
             print(f'Epoch:{epoch}, Iter:{i}, Loss:{accum_loss/accum_iter}')
         
         if (epoch+1)%2 == 0:
-            val_loss, iou_dict = validate_model(net, valid_dataloader, nn.CrossEntropyLoss(reduction='mean'), device=device)
+            val_loss, iou_dict = validate_model(net, valid_dataloader, nn.CrossEntropyLoss(reduction='mean', ignore_index=0), device=device)
             
-        wandb.log({"validation loss": val_loss, "IOUs": iou_dict})
-        print(f'Validation loss: {val_loss}')
-        print(f'IOUs per class: {iou_dict}')
+            wandb.log({"validation loss": val_loss, "IOUs": iou_dict})
+            print(f'Validation loss: {val_loss}')
+            print(f'IOUs per class: {iou_dict}')
