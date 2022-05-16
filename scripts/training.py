@@ -53,6 +53,7 @@ if __name__ == "__main__":
     parser.add_argument('--lr', default=0.1, type=float)
     parser.add_argument('--momentum', type=float, default=0.9)
     parser.add_argument('--weight_decay',type=float, default=1e-4)
+    parser.add_argument('--root_dir',type=ascii, default='/cluster/scratch/lrabuzin/waymo_frames')
 
     hyperparams = parser.parse_args()
 
@@ -62,7 +63,7 @@ if __name__ == "__main__":
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-    train_dataset = segmentation_dataset.WaymoSegmentationDataset(root_dir='/cluster/scratch/lrabuzin/waymo_frames', device=device)
+    train_dataset = segmentation_dataset.WaymoSegmentationDataset(root_dir=config["root_dir"], device=device)
     train_dataloader = DataLoader(
         train_dataset,
         batch_size=config["batch_size"],
@@ -70,7 +71,7 @@ if __name__ == "__main__":
         num_workers=0,
         shuffle = True)
 
-    valid_dataset = segmentation_dataset.WaymoSegmentationDataset(root_dir='/cluster/scratch/lrabuzin/waymo_frames', mode = 'validation', device=device)
+    valid_dataset = segmentation_dataset.WaymoSegmentationDataset(root_dir=config["root_dir"], mode = 'validation', device=device)
     valid_dataloader = DataLoader(
         valid_dataset,
         batch_size=config["batch_size"],
