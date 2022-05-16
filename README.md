@@ -26,3 +26,9 @@
 - `cd ~/logs`
 - `wandb sync --clean --sync-all`
 - runs can be viewed at https://wandb.ai/lrabuzin/pmlr-waymo
+
+### Submitting jobs
+
+- see Euler's documentation
+- when calling `python training.py`, the root directory with individual frames needs to be passed as `--root_dir`
+- if you want hyperparameters other than defaults, pass them the same way, using keywords `--batch_size`, `--max_epochs`, `--lr`, `--momentum`, `--weight_decay`
