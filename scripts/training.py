@@ -1,7 +1,7 @@
 import sys
 
-sys.path.append('/cluster/home/lrabuzin/PMLR-Waymo/dataset')
-sys.path.append('/cluster/home/lrabuzin/PMLR-Waymo/models')
+sys.path.append('../dataset')
+sys.path.append('../models')
 
 import wandb
 import eval_utils
@@ -43,7 +43,7 @@ def validate_model(model, valid_dl, loss_func, no_classes=23, device='cpu'):
     return val_loss / len(valid_dl), iou_dict
 
 if __name__ == "__main__":
-    wandb.init(project="pmlr-waymo", entity="lrabuzin")
+    wandb.init(project="pmlr-waymo")
     wandb.config = {
         "learning_rate": 0.1,
         "epochs": 10,

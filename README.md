@@ -2,11 +2,11 @@
 
 ## Usage instructions
 
-### Setting up virtual environment
+### Activating virtual environment
 
-- `module load gcc/8.2.0 python_gpu/3.8.5`
+- `module load gcc/8.2.0 python_gpu/3.8.5 eth_proxy`
 - `source $HOME/.local/bin/virtualenvwrapper.sh`
-- `workon waymo_pmlr`
+- `workon <virtual environment>`
 
 ### Copying data to other user
 
