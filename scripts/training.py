@@ -1,7 +1,11 @@
 import sys
+import os
 
-sys.path.append('/../dataset')
-sys.path.append('/../models')
+
+parent_dir = os.path.dirname(os.path.dirname(__file__))
+
+sys.path.append(os.path.join(parent_dir, 'dataset'))
+sys.path.append(os.path.join(parent_dir, 'models'))
 
 import wandb
 import eval_utils
