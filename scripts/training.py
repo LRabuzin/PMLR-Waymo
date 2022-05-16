@@ -82,7 +82,7 @@ if __name__ == "__main__":
     net = net.to(device)
     optimizer = optim.SGD(
         net.parameters(),
-        lr=config["learning_rate"],
+        lr=config["lr"],
         momentum=config["momentum"],
         weight_decay=config["weight_decay"])
 
