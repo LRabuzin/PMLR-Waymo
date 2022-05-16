@@ -1,7 +1,7 @@
 import sys
 
-sys.path.append('../dataset')
-sys.path.append('../models')
+sys.path.append('/../dataset')
+sys.path.append('/../models')
 
 import wandb
 import eval_utils
