@@ -53,7 +53,7 @@ if __name__ == "__main__":
     parser.add_argument('--lr', default=0.1, type=float)
     parser.add_argument('--momentum', type=float, default=0.9)
     parser.add_argument('--weight_decay',type=float, default=1e-4)
-    parser.add_argument('--root_dir',type=ascii, nargs = '?', const='/cluster/scratch/lrabuzin/waymo_frames')
+    parser.add_argument('--root_dir', default='/cluster/scratch/lrabuzin/waymo_frames')
 
     hyperparams = parser.parse_args()
 
