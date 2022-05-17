@@ -16,6 +16,7 @@ from torch.utils.data import DataLoader
 import segmentation_dataset
 import minkunet
 import argparse
+from datetime import datetime
 
 
 def validate_model(model, valid_dl, loss_func, no_classes=23, device='cpu'):
@@ -54,12 +55,15 @@ if __name__ == "__main__":
     parser.add_argument('--momentum', type=float, default=0.9)
     parser.add_argument('--weight_decay',type=float, default=1e-4)
     parser.add_argument('--root_dir', default='/cluster/scratch/lrabuzin/waymo_frames')
+    parser.add_argument('--checkpoint_location', default='/cluster/home/lrabuzin/PMLR-Waymo')
 
     hyperparams = parser.parse_args()
 
     wandb.init(project="pmlr-waymo", config=vars(hyperparams))
 
     config = wandb.config
+
+    start_time = datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -115,3 +119,10 @@ if __name__ == "__main__":
             wandb.log({"validation loss": val_loss, "IOUs": iou_dict})
             print(f'Validation loss: {val_loss}')
             print(f'IOUs per class: {iou_dict}')
+
+            torch.save({
+                'epoch': epoch,
+                'model_state_dict': net.state_dict(),
+                'optimizer_state_dict': optimizer.state_dict(),
+                'loss': val_loss
+            }, os.join(config["checkpoint_location"], f"checkpoint_{start_time}_epoch_{epoch}.pth"))
