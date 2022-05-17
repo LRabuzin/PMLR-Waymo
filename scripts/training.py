@@ -113,7 +113,7 @@ if __name__ == "__main__":
 
             print(f'Epoch:{epoch}, Iter:{i}, Loss:{accum_loss/accum_iter}')
         
-        if (epoch+1)%2 == 0:
+        if (epoch+1)%2 == 0 or epoch == config["max_epochs"]-1:
             val_loss, iou_dict = validate_model(net, valid_dataloader, nn.CrossEntropyLoss(reduction='mean', ignore_index=0), device=device)
             
             wandb.log({"validation loss": val_loss, "IOUs": iou_dict})
