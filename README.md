@@ -30,5 +30,5 @@
 ### Submitting jobs
 
 - see Euler's documentation
-- when calling `python training.py`, the root directory with individual frames needs to be passed as `--root_dir`
+- when calling `python training.py`, the root directory with individual frames needs to be passed as `--root_dir` and directory where model checkpoints will be saved needs to be passed as `--checkpoint_location`
 - if you want hyperparameters other than defaults, pass them the same way, using keywords `--batch_size`, `--max_epochs`, `--lr`, `--momentum`, `--weight_decay`
