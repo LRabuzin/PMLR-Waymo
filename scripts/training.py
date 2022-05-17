@@ -125,4 +125,4 @@ if __name__ == "__main__":
                 'model_state_dict': net.state_dict(),
                 'optimizer_state_dict': optimizer.state_dict(),
                 'loss': val_loss
-            }, os.join(config["checkpoint_location"], f"checkpoint_{start_time}_epoch_{epoch}.pth"))
+            }, os.path.join(config["checkpoint_location"], f"checkpoint_{start_time}_epoch_{epoch}.pth"))
