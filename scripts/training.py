@@ -67,7 +67,7 @@ if __name__ == "__main__":
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-    train_dataset = segmentation_dataset.WaymoSegmentationDataset(root_dir=config["root_dir"], device=device)
+    train_dataset = segmentation_dataset.WaymoSegmentationDataset(root_dir=config["root_dir"], device=device, quantization_size=0.1)
     train_dataloader = DataLoader(
         train_dataset,
         batch_size=config["batch_size"],
@@ -75,7 +75,7 @@ if __name__ == "__main__":
         num_workers=0,
         shuffle = True)
 
-    valid_dataset = segmentation_dataset.WaymoSegmentationDataset(root_dir=config["root_dir"], mode = 'validation', device=device)
+    valid_dataset = segmentation_dataset.WaymoSegmentationDataset(root_dir=config["root_dir"], mode = 'validation', device=device, quantization_size=0.1)
     valid_dataloader = DataLoader(
         valid_dataset,
         batch_size=config["batch_size"],
@@ -90,6 +90,8 @@ if __name__ == "__main__":
         lr=config["lr"],
         momentum=config["momentum"],
         weight_decay=config["weight_decay"])
+    
+    scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, config["max_epochs"])
 
     wandb.watch(net)
 
@@ -113,7 +115,9 @@ if __name__ == "__main__":
 
             print(f'Epoch:{epoch}, Iter:{i}, Loss:{accum_loss/accum_iter}')
         
-        if (epoch+1)%2 == 0 or epoch == config["max_epochs"]-1:
+        scheduler.step()
+
+        if True or (epoch+1)%2 == 0 or epoch == config["max_epochs"]-1:
             val_loss, iou_dict = validate_model(net, valid_dataloader, nn.CrossEntropyLoss(reduction='mean', ignore_index=0), device=device)
             
             wandb.log({"validation loss": val_loss, "IOUs": iou_dict})
@@ -127,5 +131,5 @@ if __name__ == "__main__":
                 'loss': val_loss
             }, os.path.join(config["checkpoint_location"], f"checkpoint_{start_time}_epoch_{epoch}.pth"))
 
-
 # bsub -n 12 -W 24:00 -R "rusage[mem=4096, ngpus_excl_p=1]" python scripts/training.py --max_epochs 10 --weight_decay 0.001 --batch_size 4 --root_dir /cluster/scratch/mertugrul/waymo_frames --checkpoint_location /cluster/home/mertugrul/PMLR-Waymo
+
