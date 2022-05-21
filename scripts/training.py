@@ -126,3 +126,6 @@ if __name__ == "__main__":
                 'optimizer_state_dict': optimizer.state_dict(),
                 'loss': val_loss
             }, os.path.join(config["checkpoint_location"], f"checkpoint_{start_time}_epoch_{epoch}.pth"))
+
+
+# bsub -n 12 -W 24:00 -R "rusage[mem=4096, ngpus_excl_p=1]" python scripts/training.py --max_epochs 10 --weight_decay 0.001 --batch_size 4 --root_dir /cluster/scratch/mertugrul/waymo_frames --checkpoint_location /cluster/home/mertugrul/PMLR-Waymo
