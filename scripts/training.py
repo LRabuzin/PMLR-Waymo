@@ -113,6 +113,8 @@ if __name__ == "__main__":
             accum_loss += loss.item()
             accum_iter += 1
 
+            torch.cuda.empty_cache()
+
             print(f'Epoch:{epoch}, Iter:{i}, Loss:{accum_loss/accum_iter}')
         
         scheduler.step()

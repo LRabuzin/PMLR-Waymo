@@ -196,9 +196,17 @@ def semseg_for_one_frame(frame, model, device='cpu'):
 
             range_images = parsed_frame[0]
 
-            laser_calibration_0 = frame.context.laser_calibrations[0]
+            calibrations = sorted(frame.context.laser_calibrations, key=lambda c: c.name)
+
+            laser_calibration_0 = calibrations[0]
             range_image_1 = range_images[laser_calibration_0.name][0]
             range_image_2 = range_images[laser_calibration_0.name][1]
+
+            range_image_1_tensor = tf.reshape(tf.convert_to_tensor(range_image_1.data), range_image_1.shape.dims)
+            range_image_2_tensor = tf.reshape(tf.convert_to_tensor(range_image_2.data), range_image_2.shape.dims)
+
+            range_image_1_mask = range_image_1_tensor[..., 0] > 0
+            range_image_2_mask = range_image_2_tensor[..., 0] > 0
 
 
             laser_name_str = dataset_pb2.LaserName.Name.Name(laser_calibration_0.name)
@@ -227,12 +235,14 @@ def semseg_for_one_frame(frame, model, device='cpu'):
 
 #--------------------------------------------------------------------------------------------------
 
-            discrete_coords, unique_feats, unique_labels = ME.utils.sparse_quantize(
+            discrete_coords, unique_feats, unique_labels, index, inverse = ME.utils.sparse_quantize(
                 coordinates=coordinates,
                 features=features,
                 labels=labels,
                 quantization_size=0.2,
-                ignore_label=0)
+                ignore_label=0,
+                return_index=True,
+                return_inverse=True)
 
             coords, feats = ME.utils.sparse_collate([discrete_coords], [unique_feats])
 
@@ -247,67 +257,84 @@ def semseg_for_one_frame(frame, model, device='cpu'):
             TOP_LIDAR_ROW_NUM = 64
             TOP_LIDAR_COL_NUM = 2650
 
+            out_recovered = out_squeezed.argmax(1).detach().numpy()[inverse]
 
             top_lidar_points_ri1 = coordinates[:labelled_points_num[0]]
-            top_lidar_labels_ri1 = out_squeezed[:labelled_points_num[0]]
+            top_lidar_labels_ri1 = out_recovered[:labelled_points_num[0]]
 
             top_lidar_points_ri2 = coordinates[labelled_points_num[1]:labelled_points_num[1]+labelled_points_num[2]]
-            top_lidar_labels_ri2 = out_squeezed[labelled_points_num[1]:labelled_points_num[1]+labelled_points_num[2]]
+            top_lidar_labels_ri2 = out_recovered[labelled_points_num[1]:labelled_points_num[1]+labelled_points_num[2]]
+
+            xgrid, ygrid = np.meshgrid(range(TOP_LIDAR_COL_NUM), range(TOP_LIDAR_ROW_NUM))
+            col_row_inds_top = np.stack([xgrid, ygrid], axis=-1)
+
+            points_indexing_1_top = col_row_inds_top[np.where(range_image_1_mask)]
+            points_indexing_2_top = col_row_inds_top[np.where(range_image_2_mask)]
+
+            range_image_1_labeled = np.zeros((TOP_LIDAR_ROW_NUM, TOP_LIDAR_COL_NUM, 2), dtype=np.int32)
+            range_image_2_labeled = np.zeros((TOP_LIDAR_ROW_NUM, TOP_LIDAR_COL_NUM, 2), dtype=np.int32)
+
+            range_image_1_labeled[points_indexing_1_top[:, 1], points_indexing_1_top[:, 0], 1] = top_lidar_labels_ri1
+            range_image_2_labeled[points_indexing_2_top[:, 1], points_indexing_2_top[:, 0], 1] = top_lidar_labels_ri2
+
+
+
+            #range_image_1_labeled = tf.scatter_nd(tf.where(range_image_1_mask), top_lidar_labels_ri1, shape=tf.constant([TOP_LIDAR_ROW_NUM, TOP_LIDAR_COL_NUM], dtype=tf.int64))
+            #range_image_2_labeled = tf.scatter_nd(tf.where(range_image_2_mask), top_lidar_labels_ri2, shape=tf.constant([TOP_LIDAR_ROW_NUM, TOP_LIDAR_COL_NUM], dtype=tf.int64))
+
+
+            #range_image_1,ri_indices_1,ri_ranges_1 = range_image_utils.build_range_image_from_point_cloud(points_vehicle_frame = tf.expand_dims(top_lidar_points_ri1, axis=0),
+             #                          num_points = tf.convert_to_tensor(value=[len(top_lidar_points_ri1)]),
+              #                         extrinsic  = tf.expand_dims(extrinsic, axis=0),
+               #                        inclination= tf.expand_dims(tf.convert_to_tensor(value=beam_inclinations_1), axis=0),
+                #                       range_image_size=[TOP_LIDAR_ROW_NUM,TOP_LIDAR_COL_NUM],
+                 #                      point_features=None,
+                  #                     dtype=tf.float32,
+                   #                    scope=None)
+
+            #print(range_image_1.shape)
             
-
-
-            range_image_1,ri_indices_1,ri_ranges_1 = range_image_utils.build_range_image_from_point_cloud(points_vehicle_frame = tf.expand_dims(top_lidar_points_ri1, axis=0),
-                                       num_points = tf.convert_to_tensor(value=[len(top_lidar_points_ri1)]),
-                                       extrinsic  = tf.expand_dims(extrinsic, axis=0),
-                                       inclination= tf.expand_dims(tf.convert_to_tensor(value=beam_inclinations_1), axis=0),
-                                       range_image_size=[TOP_LIDAR_ROW_NUM,TOP_LIDAR_COL_NUM],
-                                       point_features=None,
-                                       dtype=tf.float32,
-                                       scope=None)
-
-            print(range_image_1.shape)
-            
-            range_image_1 = range_image_1[0]
-            ri_indices_1 = ri_indices_1[0]
+            #range_image_1 = range_image_1[0]
+            #ri_indices_1 = ri_indices_1[0]
 
 
 
 
-            range_image_2,ri_indices_2,ri_ranges_2 = range_image_utils.build_range_image_from_point_cloud(points_vehicle_frame = tf.expand_dims(top_lidar_points_ri2, axis=0),
-                                       num_points = tf.convert_to_tensor(value=[len(top_lidar_points_ri2)]),
-                                       extrinsic  = tf.expand_dims(extrinsic, axis=0),
-                                       inclination= tf.expand_dims(tf.convert_to_tensor(value=beam_inclinations_2), axis=0),
-                                       range_image_size=[TOP_LIDAR_ROW_NUM,TOP_LIDAR_COL_NUM],
-                                       point_features=None,
-                                       dtype=tf.float32,
-                                       scope=None)
+            #range_image_2,ri_indices_2,ri_ranges_2 = range_image_utils.build_range_image_from_point_cloud(points_vehicle_frame = tf.expand_dims(top_lidar_points_ri2, axis=0),
+             #                          num_points = tf.convert_to_tensor(value=[len(top_lidar_points_ri2)]),
+              #                         extrinsic  = tf.expand_dims(extrinsic, axis=0),
+               #                        inclination= tf.expand_dims(tf.convert_to_tensor(value=beam_inclinations_2), axis=0),
+                #                       range_image_size=[TOP_LIDAR_ROW_NUM,TOP_LIDAR_COL_NUM],
+                 #                      point_features=None,
+                  #                     dtype=tf.float32,
+                   #                    scope=None)
 
-            range_image_2 = range_image_2[0]
-            ri_indices_2 = ri_indices_2[0]
+            #range_image_2 = range_image_2[0]
+            #ri_indices_2 = ri_indices_2[0]
 
 
             # Assign the dummy class to all valid points (in the range image)
-            range_image_pred = np.zeros((TOP_LIDAR_ROW_NUM, TOP_LIDAR_COL_NUM, 2), dtype=np.int32)
+            #range_image_pred = np.zeros((TOP_LIDAR_ROW_NUM, TOP_LIDAR_COL_NUM, 2), dtype=np.int32)
 
-            range_image_pred[ ri_indices_1[:, 1], ri_indices_1[:, 0], 1] = top_lidar_labels_ri1
+            #range_image_pred[ ri_indices_1[:, 1], ri_indices_1[:, 0], 1] = top_lidar_labels_ri1
 
-            range_image_pred_ri2 = np.zeros( (TOP_LIDAR_ROW_NUM, TOP_LIDAR_COL_NUM, 2), dtype=np.int32)
+            #range_image_pred_ri2 = np.zeros( (TOP_LIDAR_ROW_NUM, TOP_LIDAR_COL_NUM, 2), dtype=np.int32)
 
-            range_image_pred_ri2[ ri_indices_2[:, 1], ri_indices_2[:, 0], 1] = top_lidar_labels_ri2
+            #range_image_pred_ri2[ ri_indices_2[:, 1], ri_indices_2[:, 0], 1] = top_lidar_labels_ri2
 
 
             # Construct the SegmentationFrame proto.
             segmentation_frame = segmentation_metrics_pb2.SegmentationFrame()
 
             segmentation_frame.context_name = context_name
-            segmentation_frame.frame_timestamp_micros = timestamp
+            segmentation_frame.frame_timestamp_micros = frame.timestamp_micros
 
             laser_semseg = open_dataset.Laser()
 
             laser_semseg.name = open_dataset.LaserName.TOP
     
-            laser_semseg.ri_return1.segmentation_label_compressed = compress_array( range_image_pred, is_int32=True)
-            laser_semseg.ri_return2.segmentation_label_compressed = compress_array( range_image_pred_ri2, is_int32=True)
+            laser_semseg.ri_return1.segmentation_label_compressed = compress_array( range_image_1_labeled, is_int32=True)
+            laser_semseg.ri_return2.segmentation_label_compressed = compress_array( range_image_2_labeled, is_int32=True)
 
             segmentation_frame.segmentation_labels.append(laser_semseg)
 
@@ -386,5 +413,5 @@ def dataset_semseg(root_dir, output_dir, frame_info_path,
 
 if __name__ == '__main__':
 
-    dataset_semseg('/cluster/scratch/mertugrul/waymo_data_updated', '/cluster/home/mertugrul/PMLR-Waymo', frame_info_path='/cluster/home/mertugrul/PMLR-Waymo/dataset/3d_semseg_test_set_frames.txt',
-                   model_path="/cluster/home/mertugrul/PMLR-Waymo/checkpoint_0_epoch_0.pth")
+    dataset_semseg('/cluster/scratch/lrabuzin/waymo_data_updated', '/cluster/home/lrabuzin/PMLR-Waymo', frame_info_path='/cluster/home/lrabuzin/PMLR-Waymo/dataset/3d_semseg_test_set_frames.txt',
+                   model_path="/cluster/home/lrabuzin/PMLR-Waymo/checkpoint_2022_05_21_10_36_22_epoch_300_0.pth")
