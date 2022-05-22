@@ -3,13 +3,15 @@ import numpy as np
 import MinkowskiEngine as ME
 import numpy as np
 from waymo_open_dataset import dataset_pb2 as open_dataset
+from waymo_open_dataset.protos import segmentation_metrics_pb2
+from waymo_open_dataset.protos import segmentation_submission_pb2
+from waymo_open_dataset.utils import frame_utils,range_image_utils,transform_utils
+from waymo_open_dataset import dataset_pb2
 
 #-- new
 import zlib
 
 tf.enable_eager_execution()
-
-from waymo_open_dataset.utils import frame_utils
 
 import sys
 import os
@@ -20,11 +22,9 @@ sys.path.append(os.path.join(parent_dir, 'dataset'))
 sys.path.append(os.path.join(parent_dir, 'models'))
 
 import wandb
-import eval_utils
 import torch
 import torch.nn as nn
 import torch.optim as optim
-import MinkowskiEngine as ME
 from torch.utils.data import DataLoader
 import segmentation_dataset
 import minkunet
@@ -166,6 +166,9 @@ def semseg_for_one_frame(frame, model, device='cpu'):
 
             labelled_len_1, labelled_len_2 = len(points_ri1[0]), len(points_ri2[0])
 
+            label_points_ri1 = points_ri1[0]
+            label_points_ri2 = points_ri2[0]
+
             points_ri1 = np.concatenate(points_ri1)
             points_ri2 = np.concatenate(points_ri2)
 
@@ -177,6 +180,11 @@ def semseg_for_one_frame(frame, model, device='cpu'):
 
             features = np.concatenate((points_ri1[...,:3], points_ri2[...,:3]))
             coordinates = np.concatenate((points_ri1[...,3:], points_ri2[...,3:]))
+
+            #features_1 = label_points_ri1[...,:3]
+            #features_2 =  label_points_ri2[...,:3]
+            #coordinates_1 =  label_points_ri1[...,3:]
+            #coordinates_2 =  label_points_ri2[...,3:]
 
             point_labels_ri1 = convert_range_image_to_point_cloud_labels(frame, parsed_frame[0], parsed_frame[2])
             point_labels_ri2 = convert_range_image_to_point_cloud_labels(frame, parsed_frame[0], parsed_frame[2], ri_index=1)
@@ -194,9 +202,15 @@ def semseg_for_one_frame(frame, model, device='cpu'):
             context_name = frame.context.name
             frame_timestamp_micros = frame.timestamp_micros
 
-            laser_calibration_0 = frame.context.laser_calibrations[0]
-            range_image_1 = range_images[laser_calibration_0.name][ri_index=0]
-            range_image_2 = range_images[laser_calibration_0.name][ri_index=1]
+            range_images = parsed_frame[0]
+
+            #print(len(frame.context.laser_calibrations))
+
+            laser_calibration_0 = sorted(frame.context.laser_calibrations, key=lambda c: c.name)[0] 
+            range_image_1 = range_images[laser_calibration_0.name][0]
+            range_image_2 = range_images[laser_calibration_0.name][1]
+            #print(range_image_1.shape)
+            #print(range_image_2.shape)
 
 
             laser_name_str = dataset_pb2.LaserName.Name.Name(laser_calibration_0.name)
@@ -221,35 +235,95 @@ def semseg_for_one_frame(frame, model, device='cpu'):
 
 
             #extrinsic = laser_calibration_0.extrinsic
+            print(beam_inclinations_1)
             extrinsic = np.reshape(np.array(laser_calibration_0.extrinsic.transform), [4, 4])
 
 #--------------------------------------------------------------------------------------------------
 
-            discrete_coords, unique_feats, unique_labels = ME.utils.sparse_quantize(
+            discrete_coords, unique_feats, unique_labels, index, inverse = ME.utils.sparse_quantize(
                 coordinates=coordinates,
                 features=features,
                 labels=labels,
-                quantization_size=model.quantization_size,
-                ignore_label=0)
-    
+                quantization_size=0.2,
+                ignore_label=0,
+                return_index=True,
+                return_inverse=True)
 
-            out = model(ME.SparseTensor(unique_feats, discrete_coords, device = device))
+            #discrete_coords_1, unique_feats_1 = ME.utils.sparse_quantize(
+            #    coordinates=coordinates_1,
+            #    features=features_1,
+            #    quantization_size=0.2,
+            #    ignore_label=-100)
+
+            #discrete_coords_2, unique_feats_2 = ME.utils.sparse_quantize(
+            #    coordinates=coordinates_2,
+            #    features=features_2,
+            #    quantization_size=0.2,
+            #    ignore_label=-100)
+    
+            coords, feats = ME.utils.sparse_collate([discrete_coords], [unique_feats])
+            #coords_1, feats_1 = ME.utils.sparse_collate([discrete_coords_1], [unique_feats_1])
+            #coords_2, feats_2 = ME.utils.sparse_collate([discrete_coords_2], [unique_feats_2]) 
+
+            model_in = ME.SparseTensor( features=feats, 
+                coordinates=coords, device = device)
+
+            #model_in_1 = ME.SparseTensor( features=feats_1,
+            #    coordinates=coords_1, device = device)
+
+            #model_in_2 = ME.SparseTensor( features=feats_2,
+            #    coordinates=coords_2, device = device)
+
+
+            out = model(model_in) 
             out_squeezed = out.F.squeeze()
             out_coords = out.C.squeeze()
+            
+
+
+            #out_1 = model(model_in_1)
+            #out_squeezed_1 = out_1.F.squeeze()
+            #out_coords_1 = out_1.C.squeeze()
+
+
+            #out_2 = model(model_in_2)
+            #out_squeezed_2 = out_2.F.squeeze()
+            #out_coords_2 = out_2.C.squeeze()
+
+
+            #print("initial coords shape")
+            #print(coordinates.shape)
+            #print("out coords shape")
+            #print(out_coords.shape)
+            #print("Label output of model:")
+            #print(out_squeezed.shape)
 
             TOP_LIDAR_ROW_NUM = 64
             TOP_LIDAR_COL_NUM = 2650
+             
+            origin_labels = out_squeezed.detach().numpy().argmax(axis=1)[inverse]
+
+            top_lidar_points_ri1 = coordinates[:labelled_points_num[0]]
+            top_lidar_labels_ri1 = origin_labels[:labelled_points_num[0]]
+
+            top_lidar_points_ri2 = coordinates[labelled_points_num[1]:labelled_points_num[1]+labelled_points_num[2]]
+            top_lidar_labels_ri2 = origin_labels[labelled_points_num[1]:labelled_points_num[1]+labelled_points_num[2]]
+
+            labels_r1 = top_lidar_labels_ri1
+            labels_r2 = top_lidar_labels_ri2
+            #print("labels r1")
+            #print(labels_r1.shape)
+            #print("labels r2")
+            #print(labels_r2.shape)
+            
+            #out_labels_1 = out_squeezed_2.detach().numpy().argmax(axis=1)
+            #out_labels_2 = out_squeezed_2.detach().numpy().argmax(axis=1)
+
+            
 
 
-            top_lidar_points_ri1 = out_coords[:labelled_points_num[0]]
-            top_lidar_labels_ri1 = out_squeezed[:labelled_points_num[0]]
-
-            top_lidar_points_ri2 = out_coords[labelled_points_num[1]:labelled_points_num[1]+labelled_points_num[2]]
-            top_lidar_labels_ri2 = out_squeezed[labelled_points_num[1]:labelled_points_num[1]+labelled_points_num[2]]
-
-
-            range_image_1,ri_indices_1,ri_ranges_1 = build_range_image_from_point_cloud(points_vehicle_frame = tf.expand_dims(top_lidar_points_ri1, axis=0),
-                                       num_points = tf.convert_to_tensor(value=len(top_lidar_points_ri1)),
+            range_image_1,ri_indices_1,ri_ranges_1 =range_image_utils.build_range_image_from_point_cloud(points_vehicle_frame = tf.expand_dims(top_lidar_points_ri1, axis=0),
+                                       num_points = tf.convert_to_tensor(value=[len(top_lidar_points_ri1)]),
                                        extrinsic  = tf.expand_dims(extrinsic, axis=0),
                                        inclination= tf.expand_dims(tf.convert_to_tensor(value=beam_inclinations_1), axis=0),
                                        range_image_size=[TOP_LIDAR_ROW_NUM,TOP_LIDAR_COL_NUM],
@@ -257,14 +331,18 @@ def semseg_for_one_frame(frame, model, device='cpu'):
                                        dtype=tf.float32,
                                        scope=None)
             
-            range_image_1 = range_image_1.squeeze()
-            ri_indices_1 = ri_indices_1.squeeze()
+            range_image_1 = range_image_1[0]
+            ri_indices_1 = ri_indices_1[0]
+
+            #print(top_lidar_points_ri2.shape)
+
+            print(ri_indices_1)
+
+            print(range_image_1)
 
 
-
-
-            range_image_2,ri_indices_2,ri_ranges_2 = build_range_image_from_point_cloud(points_vehicle_frame = tf.expand_dims(top_lidar_points_ri2, axis=0),
-                                       num_points = tf.convert_to_tensor(value=len(top_lidar_points_ri2)),
+            range_image_2,ri_indices_2,ri_ranges_2 =range_image_utils.build_range_image_from_point_cloud(points_vehicle_frame = tf.expand_dims(top_lidar_points_ri2, axis=0),
+                                       num_points = tf.convert_to_tensor(value=[len(top_lidar_points_ri2)]),
                                        extrinsic  = tf.expand_dims(extrinsic, axis=0),
                                        inclination= tf.expand_dims(tf.convert_to_tensor(value=beam_inclinations_2), axis=0),
                                        range_image_size=[TOP_LIDAR_ROW_NUM,TOP_LIDAR_COL_NUM],
@@ -272,49 +350,38 @@ def semseg_for_one_frame(frame, model, device='cpu'):
                                        dtype=tf.float32,
                                        scope=None)
 
-            range_image_2 = range_image_2.squeeze()
-            ri_indices_2 = ri_indices_2.squeeze()
+            range_image_2 = range_image_2[0]
+            ri_indices_2 = ri_indices_2[0]
 
+            #print("range image shape after")
+            #print(range_image_2.shape)
 
-  """Build virtual range image from point cloud assuming uniform azimuth.
-  Args:
-    points_vehicle_frame: tf tensor with shape [B, N, 3] in the vehicle frame.
-    num_points: [B] int32 tensor indicating the number of points for each frame.
-    extrinsic: tf tensor with shape [B, 4, 4].
-    inclination: tf tensor of shape [B, H] that is the inclination angle per
-      row. sorted from highest value to lowest.
-    range_image_size: a size 2 [height, width] list that configures the size of
-      the range image.
-    point_features: If not None, it is a tf tensor with shape [B, N, 2] that
-      represents lidar 'intensity' and 'elongation'.
-    dtype: the data type to use.
-    scope: tf name scope.
-  Returns:
-    range_images : [B, H, W, 3] or [B, H, W] tensor. Range images built from the
-      given points. Data type is the same as that of points_vehicle_frame. 0.0
-      is populated when a pixel is missing.
-    ri_indices: tf int32 tensor [B, N, 2]. It represents the range image index
-      for each point.
-    ri_ranges: [B, N] tensor. It represents the distance between a point and
-      sensor frame origin of each point.
-  """
+            #print("indice shape after")
+            #print(ri_indices_2.shape) 
+            
+            #print("ri indices sample:")
+            #print(ri_indices_1[:,0])
+
+            #print("labels shape")
+            #print(labels_r1.shape)
+            #print(labels_r1)
 
 
             # Assign the dummy class to all valid points (in the range image)
             range_image_pred = np.zeros((TOP_LIDAR_ROW_NUM, TOP_LIDAR_COL_NUM, 2), dtype=np.int32)
 
-            range_image_pred[ ri_indices_1[:, 1], ri_indices_1[:, 0], 1] = top_lidar_labels_ri1
+            range_image_pred[ ri_indices_1[:, 0], ri_indices_1[:, 1], 1] = labels_r1
 
             range_image_pred_ri2 = np.zeros( (TOP_LIDAR_ROW_NUM, TOP_LIDAR_COL_NUM, 2), dtype=np.int32)
 
-            range_image_pred_ri2[ ri_indices_2[:, 1], ri_indices_2[:, 0], 1] = top_lidar_labels_ri2
+            range_image_pred_ri2[ ri_indices_2[:, 0], ri_indices_2[:, 1], 1] = labels_r2
 
 
             # Construct the SegmentationFrame proto.
             segmentation_frame = segmentation_metrics_pb2.SegmentationFrame()
 
             segmentation_frame.context_name = context_name
-            segmentation_frame.frame_timestamp_micros = timestamp
+            segmentation_frame.frame_timestamp_micros = frame_timestamp_micros
 
             laser_semseg = open_dataset.Laser()
 
@@ -330,15 +397,15 @@ def semseg_for_one_frame(frame, model, device='cpu'):
 
 
 
-def dataset_semseg(root_dir, output_dir, frame_info_path='/dataset/3d_semseg_test_set_frames.txt',
-                   model_path)
+def dataset_semseg(root_dir, output_dir, frame_info_path,
+        model_path):
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     testing_set_frame_file = frame_info_path
 
     context_name_timestamp_tuples = [x.rstrip().split(',') for x in (open(testing_set_frame_file, 'r').readlines())]
-
+    #print(context_name_timestamp_tuples)
     segmentation_frame_list = segmentation_metrics_pb2.SegmentationFrameList()
 
     # ADD MODEL LOADING CODE
@@ -362,7 +429,9 @@ def dataset_semseg(root_dir, output_dir, frame_info_path='/dataset/3d_semseg_tes
             context_name = frame.context.name
             timestamp = frame.timestamp_micros
 
-            if (context_name, str(timestamp)) in context_name_timestamp_tuples:
+            #print(context_name + " "+ str(timestamp) )
+
+            if [context_name, str(timestamp)] in context_name_timestamp_tuples:
 
                 segmentation_frame = semseg_for_one_frame(frame=frame, model=model, device=device)
 
@@ -399,4 +468,4 @@ def dataset_semseg(root_dir, output_dir, frame_info_path='/dataset/3d_semseg_tes
 if __name__ == '__main__':
 
     dataset_semseg('/cluster/scratch/mertugrul/waymo_data_updated', '/cluster/home/mertugrul/PMLR-Waymo', frame_info_path='/cluster/home/mertugrul/PMLR-Waymo/dataset/3d_semseg_test_set_frames.txt',
-                   model_path="/cluster/home/mertugrul/PMLR-Waymo/checkpoint_{start_time}_epoch_{epoch}.pth")
+                   model_path="/cluster/home/mertugrul/PMLR-Waymo/checkpoint.pth")
