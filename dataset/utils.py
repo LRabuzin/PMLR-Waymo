@@ -255,12 +255,14 @@ def semseg_for_one_frame(frame, model, device='cpu'):
                 out = model( model_in)
 
                 out_squeezed = out.F.squeeze()
-                out_coords = out.C.squeeze()
 
                 TOP_LIDAR_ROW_NUM = 64
                 TOP_LIDAR_COL_NUM = 2650
 
                 out_recovered = out_squeezed.argmax(1).cpu().detach().numpy()[inverse]
+                del out
+                del out_squeezed
+                del model_in
 
             top_lidar_points_ri1 = coordinates[:labelled_points_num[0]]
             top_lidar_labels_ri1 = out_recovered[:labelled_points_num[0]]
