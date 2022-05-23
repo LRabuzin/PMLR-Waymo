@@ -235,29 +235,32 @@ def semseg_for_one_frame(frame, model, device='cpu'):
 
 #--------------------------------------------------------------------------------------------------
 
-            discrete_coords, unique_feats, unique_labels, index, inverse = ME.utils.sparse_quantize(
-                coordinates=coordinates,
-                features=features,
-                labels=labels,
-                quantization_size=0.2,
-                ignore_label=0,
-                return_index=True,
-                return_inverse=True)
+            model.eval()
+            with torch.inference_mode():
+                print("|")
+                discrete_coords, unique_feats, unique_labels, index, inverse = ME.utils.sparse_quantize(
+                    coordinates=coordinates,
+                    features=features,
+                    labels=labels,
+                    quantization_size=0.2,
+                    ignore_label=0,
+                    return_index=True,
+                    return_inverse=True)
 
-            coords, feats = ME.utils.sparse_collate([discrete_coords], [unique_feats])
+                coords, feats = ME.utils.sparse_collate([discrete_coords], [unique_feats])
 
-            model_in = ME.SparseTensor( features=feats, 
-                coordinates=coords, device = device)
+                model_in = ME.SparseTensor( features=feats, 
+                    coordinates=coords, device = device)
 
-            out = model( model_in)
+                out = model( model_in)
 
-            out_squeezed = out.F.squeeze()
-            out_coords = out.C.squeeze()
+                out_squeezed = out.F.squeeze()
+                out_coords = out.C.squeeze()
 
-            TOP_LIDAR_ROW_NUM = 64
-            TOP_LIDAR_COL_NUM = 2650
+                TOP_LIDAR_ROW_NUM = 64
+                TOP_LIDAR_COL_NUM = 2650
 
-            out_recovered = out_squeezed.argmax(1).detach().numpy()[inverse]
+                out_recovered = out_squeezed.argmax(1).cpu().detach().numpy()[inverse]
 
             top_lidar_points_ri1 = coordinates[:labelled_points_num[0]]
             top_lidar_labels_ri1 = out_recovered[:labelled_points_num[0]]
@@ -356,6 +359,9 @@ def dataset_semseg(root_dir, output_dir, frame_info_path,
 
     # ADD MODEL LOADING CODE
     model = minkunet.MinkUNet14A(in_channels=3, out_channels=23, D=3)
+
+    model = model.to(device)
+
     checkpoint = torch.load(model_path)
     model.load_state_dict(checkpoint['model_state_dict'])
     model.eval()
@@ -414,4 +420,4 @@ def dataset_semseg(root_dir, output_dir, frame_info_path,
 if __name__ == '__main__':
 
     dataset_semseg('/cluster/scratch/lrabuzin/waymo_data_updated', '/cluster/home/lrabuzin/PMLR-Waymo', frame_info_path='/cluster/home/lrabuzin/PMLR-Waymo/dataset/3d_semseg_test_set_frames.txt',
-                   model_path="/cluster/home/lrabuzin/PMLR-Waymo/checkpoint_2022_05_21_10_36_22_epoch_300_0.pth")
+                   model_path="/cluster/home/lrabuzin/PMLR-Waymo/checkpoint_2022_05_22_13_58_07_epoch_9.pth")
