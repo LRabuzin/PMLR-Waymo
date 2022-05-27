@@ -60,6 +60,7 @@ if __name__ == "__main__":
     parser.add_argument('--root_dir', default='/cluster/scratch/lrabuzin/waymo_frames')
     parser.add_argument('--checkpoint_location', default='/cluster/home/lrabuzin/PMLR-Waymo')
     parser.add_argument('--load_checkpoint')
+    parser.add_argument('--weighted_loss', action='store_true')
 
     hyperparams = parser.parse_args()
 
@@ -86,7 +87,12 @@ if __name__ == "__main__":
         collate_fn=ME.utils.SparseCollation(),
         num_workers=0)
 
-    criterion = nn.CrossEntropyLoss(reduction='mean', ignore_index=0)
+    if config["weighted_loss"]:
+        loss_weights = torch.tensor([0,1,3,3,5,7,5,1,3,3,3,5,7,7,1,1,3,3,1,5,7,3,3]).float().to(device)
+    else:
+        loss_weights = None
+
+    criterion = nn.CrossEntropyLoss(weight=loss_weights, reduction='mean', ignore_index=0)
     net = train_utils.build_model(config["model_type"])
     net = net.to(device)
     optimizer = optim.SGD(
