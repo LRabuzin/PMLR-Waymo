@@ -364,7 +364,7 @@ def dataset_semseg(root_dir, output_dir, frame_info_path,
 
     model = model.to(device)
 
-    checkpoint = torch.load(model_path)
+    checkpoint = torch.load(model_path, map_location=device)
     model.load_state_dict(checkpoint['model_state_dict'])
     model.eval()
 
@@ -385,11 +385,11 @@ def dataset_semseg(root_dir, output_dir, frame_info_path,
 
             #print(context_name + " "+ str(timestamp) )
 
-            #if (context_name, str(timestamp)) in context_name_timestamp_tuples:
+            if [context_name, str(timestamp)] in context_name_timestamp_tuples:
 
-            segmentation_frame = semseg_for_one_frame(frame=frame, model=model, device=device)
+                segmentation_frame = semseg_for_one_frame(frame=frame, model=model, device=device)
 
-            segmentation_frame_list.frames.append(segmentation_frame)
+                segmentation_frame_list.frames.append(segmentation_frame)
 
     print('Total number of frames: ', len(segmentation_frame_list.frames))
 

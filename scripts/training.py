@@ -16,6 +16,7 @@ from torch.utils.data import DataLoader
 import segmentation_dataset
 import minkunet
 import argparse
+import train_utils
 from datetime import datetime
 
 
@@ -49,13 +50,16 @@ def validate_model(model, valid_dl, loss_func, no_classes=23, device='cpu'):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
+    parser.add_argument('--model_type', default='14A')
     parser.add_argument('--batch_size', default=5, type=int)
     parser.add_argument('--max_epochs', default=10, type=int)
     parser.add_argument('--lr', default=0.1, type=float)
     parser.add_argument('--momentum', type=float, default=0.9)
     parser.add_argument('--weight_decay',type=float, default=1e-4)
+    parser.add_argument('--quantization_size',type=float, default=0.1)
     parser.add_argument('--root_dir', default='/cluster/scratch/lrabuzin/waymo_frames')
     parser.add_argument('--checkpoint_location', default='/cluster/home/lrabuzin/PMLR-Waymo')
+    parser.add_argument('--load_checkpoint')
 
     hyperparams = parser.parse_args()
 
@@ -67,7 +71,7 @@ if __name__ == "__main__":
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-    train_dataset = segmentation_dataset.WaymoSegmentationDataset(root_dir=config["root_dir"], device=device, quantization_size=0.1)
+    train_dataset = segmentation_dataset.WaymoSegmentationDataset(root_dir=config["root_dir"], device=device, quantization_size=config["quantization_size"])
     train_dataloader = DataLoader(
         train_dataset,
         batch_size=config["batch_size"],
@@ -75,7 +79,7 @@ if __name__ == "__main__":
         num_workers=0,
         shuffle = True)
 
-    valid_dataset = segmentation_dataset.WaymoSegmentationDataset(root_dir=config["root_dir"], mode = 'validation', device=device, quantization_size=0.1)
+    valid_dataset = segmentation_dataset.WaymoSegmentationDataset(root_dir=config["root_dir"], mode = 'validation', device=device, quantization_size=config["quantization_size"])
     valid_dataloader = DataLoader(
         valid_dataset,
         batch_size=config["batch_size"],
@@ -83,7 +87,7 @@ if __name__ == "__main__":
         num_workers=0)
 
     criterion = nn.CrossEntropyLoss(reduction='mean', ignore_index=0)
-    net = minkunet.MinkUNet14A(in_channels=3, out_channels=23, D=3)
+    net = train_utils.build_model(config["model_type"])
     net = net.to(device)
     optimizer = optim.SGD(
         net.parameters(),
@@ -91,11 +95,19 @@ if __name__ == "__main__":
         momentum=config["momentum"],
         weight_decay=config["weight_decay"])
     
-    scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, config["max_epochs"])
+    if config["load_checkpoint"]:
+        checkpoint = torch.load(config["load_checkpoint"], map_location=device)
+        net.load_state_dict(checkpoint['model_state_dict'])
+        optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+        last_epoch = checkpoint['epoch']
+    else:
+        last_epoch = -1
+    
+    scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, config["max_epochs"], last_epoch=last_epoch)
 
     wandb.watch(net)
 
-    for epoch in range(config["max_epochs"]):
+    for epoch in range(last_epoch + 1, config["max_epochs"]):
         train_iter = iter(train_dataloader)
         accum_loss = 0
         accum_iter = 0
@@ -113,7 +125,7 @@ if __name__ == "__main__":
             accum_loss += loss.item()
             accum_iter += 1
 
-            torch.cuda.empty_cache()
+            # torch.cuda.empty_cache()
 
             print(f'Epoch:{epoch}, Iter:{i}, Loss:{accum_loss/accum_iter}')
         
